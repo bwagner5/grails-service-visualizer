@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-var IGNORED_DIRS []string = []string{".git", "target"}
+var IGNORED_DIRS []string = []string{".git", "target", "src"}
 
 func main() {
 
