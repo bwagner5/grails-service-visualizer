@@ -16,7 +16,6 @@ import (
 	"bufio"
 	"code.google.com/p/gographviz"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -53,66 +52,33 @@ func main() {
 	for _, f := range files {
 		name := filepath.Base(f)
 
+		// TODO: add support for different types of artifacts
 		isController := strings.Contains(name, "Controller")
 		isService := strings.Contains(name, "Service")
 
 		if !isController && !isService {
 			continue
 		}
-		nameWithoutExtension := name[:strings.Index(name, ".groovy")]
+		currentArtifactName := strings.Title(name[:strings.Index(name, ".groovy")])
 
-		var params map[string]string = make(map[string]string)
-		if isService {
-			params["shape"] = "\"hexagon\""
-			params["tooltip"] = fmt.Sprintf("\"From File %s\"", f)
-		}
+		addEntity(graph, currentArtifactName)
 
-		if !graph.IsNode(nameWithoutExtension) {
-			graph.AddNode("", nameWithoutExtension, params)
-		}
-
+		// Now scan the actual file:
 		src, err := os.Open(f)
-
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer src.Close()
 		reader := bufio.NewReader(src)
 
-		for {
-			line, err := reader.ReadString('\n')
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				log.Fatal(err)
-			}
+		deps := ScanForDependencies(name, reader)
 
-			if strings.Contains(line, "import") {
-				continue
-			}
+		for i := range deps {
+			dep := deps[i]
 
-			trimmed := strings.Trim(line, "\n\r\t")
+			addEntity(graph, dep.Name)
 
-			serviceDefinition := EndsWith(trimmed, "Service")
-
-			if serviceDefinition {
-
-				split := strings.Split(trimmed, " ")
-				name := strings.Title(strings.Trim(split[1], " "))
-				if len(name) == 0 {
-					continue
-				}
-				var params map[string]string = make(map[string]string)
-				if strings.Contains(name, "Service") {
-					params["shape"] = "\"hexagon\""
-					params["tooltip"] = fmt.Sprintf("\"From Source %s\"", trimmed)
-				}
-
-				if !graph.IsNode(name) {
-					graph.AddNode("", name, params)
-				}
-
-				graph.AddEdge(nameWithoutExtension, "", name, "", true, nil)
-			}
+			graph.AddEdge(currentArtifactName, "", dep.Name, "", true, nil)
 		}
 
 	}
@@ -125,18 +91,21 @@ func main() {
 
 }
 
-func EndsWith(haystack, needle string) bool {
-	if len(haystack) == 0 {
-		return false
-	}
-	lastIndex := strings.LastIndex(haystack, needle)
+func addEntity(graph *gographviz.Graph, name string) {
+	isController := strings.Contains(name, "Controller")
+	isService := strings.Contains(name, "Service")
 
-	if lastIndex < 0 {
-		return false
+	var params map[string]string = make(map[string]string)
+	if isService {
+		params["shape"] = "\"hexagon\""
+
+	} else if isController {
+		params["shape"] = "\"invhouse\""
 	}
 
-	expectedIndex := len(haystack) - len(needle)
-	return lastIndex == expectedIndex
+	if !graph.IsNode(name) {
+		graph.AddNode("", name, params)
+	}
 
 }
 
